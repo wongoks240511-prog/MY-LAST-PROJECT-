@@ -20,6 +20,9 @@ def load_data():
 
 try:
     df = load_data()
+except FileNotFoundError:
+    st.error("❌ CSV 파일이 폴더 안에 없습니다. 파일 이름이 정확한지 확인하세요.")
+    st.stop()
 except Exception as e:
     st.error(f"❌ CSV 파일을 불러오는 중 오류가 발생했습니다: {e}")
     st.stop()
@@ -28,30 +31,22 @@ st.subheader("📁 원본 데이터 미리보기")
 st.dataframe(df.head())
 
 # -------------------------------
-# 3. 데이터 구조 파악
+# 3. 필터 자동 감지
 # -------------------------------
-st.markdown("#### 데이터 기본 정보")
-st.write(df.describe(include="all"))
+columns = df.columns.tolist()
+
+gender_col = next((col for col in columns if "성별" in col), None)
+age_col = next((col for col in columns if "연령" in col), None)
+
+if not gender_col or not age_col:
+    st.error("⚠️ '성별' 또는 '연령' 관련 컬럼을 찾을 수 없습니다. CSV 헤더를 확인해주세요.")
+    st.stop()
 
 # -------------------------------
-# 4. 필터 설정
+# 4. 사이드바 필터
 # -------------------------------
 st.sidebar.header("🔍 필터 선택")
 
-# 자동으로 컬럼명 탐색
-columns = df.columns.tolist()
-
-# 성별 및 연령 관련 컬럼 자동 추출
-gender_col = next((col for col in columns if "성별" in col), None)
-age_col = next((col for col in columns if "연령" in col), None)
-ott_col = next((col for col in columns if "OTT" in col or "서비스" in col), None)
-
-# 유효성 확인
-if not gender_col or not age_col:
-    st.error("⚠️ '성별' 또는 '연령' 관련 컬럼을 찾을 수 없습니다. CSV 파일의 헤더를 확인해주세요.")
-    st.stop()
-
-# 필터 위젯
 selected_gender = st.sidebar.multiselect(
     "성별 선택",
     options=df[gender_col].unique().tolist(),
@@ -64,21 +59,20 @@ selected_ages = st.sidebar.multiselect(
     default=df[age_col].unique().tolist()
 )
 
-# 필터 적용
 filtered_df = df[df[gender_col].isin(selected_gender) & df[age_col].isin(selected_ages)]
 
 # -------------------------------
-# 5. Plotly 시각화
+# 5. 수치형 컬럼 선택 및 시각화
 # -------------------------------
-st.subheader("📊 OTT 서비스 이용 비율 시각화")
-
 numeric_cols = df.select_dtypes(include=["float", "int"]).columns.tolist()
 
-if not numeric_cols:
+st.subheader("📊 OTT 서비스 이용 비율 시각화")
+
+if len(numeric_cols) == 0:
     st.warning("⚠️ 시각화할 수 있는 수치형 컬럼이 없습니다.")
 else:
     y_col = st.selectbox("시각화할 지표 선택", numeric_cols)
-    
+
     fig = px.bar(
         filtered_df,
         x=age_col,
@@ -99,17 +93,17 @@ else:
     st.plotly_chart(fig, use_container_width=True)
 
 # -------------------------------
-# 6. 추가 분석 (선택 기능)
+# 6. 성별 평균 비교 (추가 시각화)
 # -------------------------------
-with st.expander("📈 추가 분석 보기"):
+with st.expander("📈 성별 평균 이용률 비교"):
     avg_df = df.groupby(gender_col)[numeric_cols].mean().reset_index()
     fig2 = px.bar(
         avg_df,
         x=gender_col,
         y=numeric_cols[0],
         text_auto=".2f",
-        title="성별 평균 이용률 비교"
+        title=f"성별 평균 {numeric_cols[0]} 비교"
     )
     st.plotly_chart(fig2, use_container_width=True)
 
-st.markdown("✅ **완료:** OTT 이용률 데이터를 시각화했습니다!")
+st.success("✅ OTT 이용률 시각화를 완료했습니다!")
