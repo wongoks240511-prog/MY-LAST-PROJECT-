@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 
 # -----------------------------------
-# 1️⃣ 앱 기본 설정
+# 1️⃣ 기본 설정
 # -----------------------------------
 st.set_page_config(
     page_title="OTT 서비스 이용 비율 시각화",
@@ -11,8 +11,8 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("📊 한국방송광고진흥공사 - 성별·연령별 OTT 서비스 이용 비율")
-st.markdown("#### 데이터 기반으로 OTT 이용 비율을 시각화합니다.")
+st.title("📊 성별·연령별 OTT 서비스 이용 비율")
+st.markdown("한국방송광고진흥공사 데이터 기반 시각화")
 
 # -----------------------------------
 # 2️⃣ 데이터 불러오기
@@ -24,82 +24,78 @@ def load_data():
 
 df = load_data()
 
+# -----------------------------------
+# 3️⃣ 컬럼 설명
+# -----------------------------------
+# 구분1 = 성별, 구분2 = 연령대
 st.write("### 데이터 미리보기")
 st.dataframe(df.head())
 
 # -----------------------------------
-# 3️⃣ 컬럼 자동 인식 및 정리
+# 4️⃣ 사용자 선택
 # -----------------------------------
-# 예시: 성별, 연령대, 서비스명, 이용비율 등의 컬럼이 있다고 가정
-# (파일 컬럼명이 다르다면 실제 컬럼명을 출력해서 수정 가능)
-st.write("### 데이터 컬럼 확인")
-st.write(df.columns.tolist())
+sexes = df['구분1'].unique().tolist()
+ages = df['구분2'].unique().tolist()
+
+selected_sex = st.sidebar.selectbox("성별 선택", sexes)
+selected_age = st.sidebar.selectbox("연령대 선택", ages)
 
 # -----------------------------------
-# 4️⃣ 사용자 입력 위젯
+# 5️⃣ 데이터 변환 (wide → long 형태)
 # -----------------------------------
-if '성별' in df.columns:
-    genders = df['성별'].unique().tolist()
-    selected_gender = st.sidebar.selectbox("성별 선택", genders)
-else:
-    selected_gender = None
+value_cols = [
+    '유튜브', '넷플릭스', '티빙', '웨이브', 'SOOP(구 아프리카TV)',
+    '카카오TV', '왓챠', '쿠팡플레이', 'NAVER TV(구 NOW)',
+    '디즈니플러스', 'U플러스모바일TV', '애플TV플러스', '기타', 'OTT 비이용'
+]
 
-if '연령대' in df.columns:
-    ages = df['연령대'].unique().tolist()
-    selected_age = st.sidebar.selectbox("연령대 선택", ages)
-else:
-    selected_age = None
+df_long = df.melt(
+    id_vars=['연도', '구분1', '구분2'],
+    value_vars=value_cols,
+    var_name='OTT 서비스',
+    value_name='이용비율'
+)
 
-if '서비스명' in df.columns:
-    services = df['서비스명'].unique().tolist()
-    selected_services = st.sidebar.multiselect("OTT 서비스 선택", services, default=services)
-else:
-    selected_services = None
+# 선택된 필터 적용
+filtered = df_long[(df_long['구분1'] == selected_sex) & (df_long['구분2'] == selected_age)]
 
 # -----------------------------------
-# 5️⃣ 필터 적용
+# 6️⃣ 막대 그래프 시각화
 # -----------------------------------
-filtered_df = df.copy()
+st.subheader(f"📈 {selected_sex} / {selected_age} 의 OTT 서비스 이용 비율")
 
-if selected_gender:
-    filtered_df = filtered_df[filtered_df['성별'] == selected_gender]
-
-if selected_age:
-    filtered_df = filtered_df[filtered_df['연령대'] == selected_age]
-
-if selected_services:
-    filtered_df = filtered_df[filtered_df['서비스명'].isin(selected_services)]
-
-# -----------------------------------
-# 6️⃣ 시각화
-# -----------------------------------
-if '이용비율' in df.columns and '서비스명' in df.columns:
-    fig = px.bar(
-        filtered_df,
-        x='서비스명',
-        y='이용비율',
-        color='서비스명',
-        text='이용비율',
-        title=f"{selected_gender or '전체'} / {selected_age or '전체'} 이용비율",
-        labels={'이용비율': '이용 비율(%)', '서비스명': 'OTT 서비스'},
-    )
-    fig.update_traces(texttemplate='%{text:.2f}%', textposition='outside')
-    fig.update_layout(xaxis_title="OTT 서비스", yaxis_title="이용비율(%)", showlegend=False)
-    st.plotly_chart(fig, use_container_width=True)
-else:
-    st.warning("⚠️ '서비스명' 또는 '이용비율' 컬럼이 데이터에 없습니다. CSV 컬럼명을 확인해주세요.")
+fig = px.bar(
+    filtered,
+    x='OTT 서비스',
+    y='이용비율',
+    color='OTT 서비스',
+    text='이용비율',
+    title=f"{selected_sex} / {selected_age} OTT 이용비율",
+    labels={'이용비율': '이용 비율(%)'}
+)
+fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+fig.update_layout(showlegend=False, yaxis_title="이용 비율(%)", xaxis_title="OTT 서비스")
+st.plotly_chart(fig, use_container_width=True)
 
 # -----------------------------------
-# 7️⃣ 추가 시각화: 연령대별 비교 (선택)
+# 7️⃣ 연령대별 추세선 (선 그래프)
 # -----------------------------------
-if '연령대' in df.columns and '이용비율' in df.columns and '서비스명' in df.columns:
-    st.write("### 연령대별 이용비율 비교")
-    fig2 = px.line(
-        df[df['서비스명'].isin(selected_services)],
-        x='연령대',
-        y='이용비율',
-        color='서비스명',
-        markers=True,
-        title="연령대별 OTT 서비스 이용 추세"
-    )
-    st.plotly_chart(fig2, use_container_width=True)
+st.subheader("📊 연령대별 OTT 서비스 이용 추세 비교")
+
+selected_services = st.multiselect("OTT 서비스 선택", value_cols, default=['유튜브', '넷플릭스', '티빙'])
+
+filtered_age = df_long[
+    (df_long['구분1'] == selected_sex) & 
+    (df_long['OTT 서비스'].isin(selected_services))
+]
+
+fig2 = px.line(
+    filtered_age,
+    x='구분2',
+    y='이용비율',
+    color='OTT 서비스',
+    markers=True,
+    title=f"{selected_sex} 기준 연령대별 OTT 서비스 이용 추세"
+)
+fig2.update_layout(xaxis_title="연령대", yaxis_title="이용비율(%)")
+st.plotly_chart(fig2, use_container_width=True)
