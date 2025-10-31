@@ -2,108 +2,104 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# -------------------------------
-# 1. 기본 설정
-# -------------------------------
-st.set_page_config(page_title="OTT 서비스 이용 비율 시각화", layout="wide")
+# -----------------------------------
+# 1️⃣ 앱 기본 설정
+# -----------------------------------
+st.set_page_config(
+    page_title="OTT 서비스 이용 비율 시각화",
+    page_icon="📺",
+    layout="wide"
+)
 
-st.title("🎬 성별·연령별 OTT 서비스 이용 비율 시각화")
-st.markdown("한국방송광고진흥공사 데이터 기반 시각화 (2025-08-25)")
+st.title("📊 한국방송광고진흥공사 - 성별·연령별 OTT 서비스 이용 비율")
+st.markdown("#### 데이터 기반으로 OTT 이용 비율을 시각화합니다.")
 
-# -------------------------------
-# 2. 데이터 불러오기
-# -------------------------------
+# -----------------------------------
+# 2️⃣ 데이터 불러오기
+# -----------------------------------
 @st.cache_data
 def load_data():
     df = pd.read_csv("한국방송광고진흥공사_성별 연령별 OTT 서비스 이용 비율_20250825.csv")
     return df
 
-try:
-    df = load_data()
-except FileNotFoundError:
-    st.error("❌ CSV 파일이 폴더 안에 없습니다. 파일 이름이 정확한지 확인하세요.")
-    st.stop()
-except Exception as e:
-    st.error(f"❌ CSV 파일을 불러오는 중 오류가 발생했습니다: {e}")
-    st.stop()
+df = load_data()
 
-st.subheader("📁 원본 데이터 미리보기")
+st.write("### 데이터 미리보기")
 st.dataframe(df.head())
 
-# -------------------------------
-# 3. 필터 자동 감지
-# -------------------------------
-columns = df.columns.tolist()
+# -----------------------------------
+# 3️⃣ 컬럼 자동 인식 및 정리
+# -----------------------------------
+# 예시: 성별, 연령대, 서비스명, 이용비율 등의 컬럼이 있다고 가정
+# (파일 컬럼명이 다르다면 실제 컬럼명을 출력해서 수정 가능)
+st.write("### 데이터 컬럼 확인")
+st.write(df.columns.tolist())
 
-gender_col = next((col for col in columns if "성별" in col), None)
-age_col = next((col for col in columns if "연령" in col), None)
-
-if not gender_col or not age_col:
-    st.error("⚠️ '성별' 또는 '연령' 관련 컬럼을 찾을 수 없습니다. CSV 헤더를 확인해주세요.")
-    st.stop()
-
-# -------------------------------
-# 4. 사이드바 필터
-# -------------------------------
-st.sidebar.header("🔍 필터 선택")
-
-selected_gender = st.sidebar.multiselect(
-    "성별 선택",
-    options=df[gender_col].unique().tolist(),
-    default=df[gender_col].unique().tolist()
-)
-
-selected_ages = st.sidebar.multiselect(
-    "연령대 선택",
-    options=df[age_col].unique().tolist(),
-    default=df[age_col].unique().tolist()
-)
-
-filtered_df = df[df[gender_col].isin(selected_gender) & df[age_col].isin(selected_ages)]
-
-# -------------------------------
-# 5. 수치형 컬럼 선택 및 시각화
-# -------------------------------
-numeric_cols = df.select_dtypes(include=["float", "int"]).columns.tolist()
-
-st.subheader("📊 OTT 서비스 이용 비율 시각화")
-
-if len(numeric_cols) == 0:
-    st.warning("⚠️ 시각화할 수 있는 수치형 컬럼이 없습니다.")
+# -----------------------------------
+# 4️⃣ 사용자 입력 위젯
+# -----------------------------------
+if '성별' in df.columns:
+    genders = df['성별'].unique().tolist()
+    selected_gender = st.sidebar.selectbox("성별 선택", genders)
 else:
-    y_col = st.selectbox("시각화할 지표 선택", numeric_cols)
+    selected_gender = None
 
+if '연령대' in df.columns:
+    ages = df['연령대'].unique().tolist()
+    selected_age = st.sidebar.selectbox("연령대 선택", ages)
+else:
+    selected_age = None
+
+if '서비스명' in df.columns:
+    services = df['서비스명'].unique().tolist()
+    selected_services = st.sidebar.multiselect("OTT 서비스 선택", services, default=services)
+else:
+    selected_services = None
+
+# -----------------------------------
+# 5️⃣ 필터 적용
+# -----------------------------------
+filtered_df = df.copy()
+
+if selected_gender:
+    filtered_df = filtered_df[filtered_df['성별'] == selected_gender]
+
+if selected_age:
+    filtered_df = filtered_df[filtered_df['연령대'] == selected_age]
+
+if selected_services:
+    filtered_df = filtered_df[filtered_df['서비스명'].isin(selected_services)]
+
+# -----------------------------------
+# 6️⃣ 시각화
+# -----------------------------------
+if '이용비율' in df.columns and '서비스명' in df.columns:
     fig = px.bar(
         filtered_df,
-        x=age_col,
-        y=y_col,
-        color=gender_col,
-        barmode="group",
-        text_auto=".1f",
-        title=f"{y_col} - 성별·연령별 비교",
-        labels={age_col: "연령대", y_col: y_col, gender_col: "성별"}
+        x='서비스명',
+        y='이용비율',
+        color='서비스명',
+        text='이용비율',
+        title=f"{selected_gender or '전체'} / {selected_age or '전체'} 이용비율",
+        labels={'이용비율': '이용 비율(%)', '서비스명': 'OTT 서비스'},
     )
-    fig.update_layout(
-        xaxis_title="연령대",
-        yaxis_title=y_col,
-        legend_title="성별",
-        template="plotly_white",
-        margin=dict(l=20, r=20, t=50, b=20)
-    )
+    fig.update_traces(texttemplate='%{text:.2f}%', textposition='outside')
+    fig.update_layout(xaxis_title="OTT 서비스", yaxis_title="이용비율(%)", showlegend=False)
     st.plotly_chart(fig, use_container_width=True)
+else:
+    st.warning("⚠️ '서비스명' 또는 '이용비율' 컬럼이 데이터에 없습니다. CSV 컬럼명을 확인해주세요.")
 
-# -------------------------------
-# 6. 성별 평균 비교 (추가 시각화)
-# -------------------------------
-with st.expander("📈 성별 평균 이용률 비교"):
-    avg_df = df.groupby(gender_col)[numeric_cols].mean().reset_index()
-    fig2 = px.bar(
-        avg_df,
-        x=gender_col,
-        y=numeric_cols[0],
-        text_auto=".2f",
-        title=f"성별 평균 {numeric_cols[0]} 비교"
+# -----------------------------------
+# 7️⃣ 추가 시각화: 연령대별 비교 (선택)
+# -----------------------------------
+if '연령대' in df.columns and '이용비율' in df.columns and '서비스명' in df.columns:
+    st.write("### 연령대별 이용비율 비교")
+    fig2 = px.line(
+        df[df['서비스명'].isin(selected_services)],
+        x='연령대',
+        y='이용비율',
+        color='서비스명',
+        markers=True,
+        title="연령대별 OTT 서비스 이용 추세"
     )
     st.plotly_chart(fig2, use_container_width=True)
-
-st.success("✅ OTT 이용률 시각화를 완료했습니다!")
