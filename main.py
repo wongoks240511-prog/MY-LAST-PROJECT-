@@ -38,7 +38,7 @@ service_cols = [c for c in df.columns if c not in ['연도', group_col, group_va
 # -----------------------
 # 사이드바: 성별 / 연령대 선택 (각각 올바른 값만 노출)
 # -----------------------
-st.sidebar.header("필터 옵션 (정확히 분리됨)")
+st.sidebar.header("필터 옵션")
 
 # 성별 옵션: df에서 구분1 == '성별' 인 행의 구분2 값들 (예: '남성', '여성')
 sex_values = df[df[group_col] == '성별'][group_value_col].dropna().unique().tolist()
